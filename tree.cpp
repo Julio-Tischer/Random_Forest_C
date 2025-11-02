@@ -8,44 +8,88 @@
 
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
 float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
+float* da_FloArr (float* variable, int size);
+int* da_IntArr (int* variable, int size);
 
 //MEU DEUS STRUCTS SÃO MUITO TOPPPPPPPPPPPPPPP
-
-//Esse struct armazena a lista de features e seus threshoulds ideais, ordem de impureza crescente
+struct giniOutput calcGini(int ID, float threshold, float best_Threshold, float** featureTable, int lenghtOf_Table);
+struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber);
+//Esse struct armazena uma lista de ID com seus respectivos IDs e positividades (se abaixo de threshold é positivo ou falso)
 struct ordemFeature 
 {
-    int* Troncos;
-    int* threshould;
+    int* ID;
+    float* threshold;
+    int* isPositive;
+    int* isLeaf;
+    float* gini;
 };
 
-//Essa função retorna um struct de formato ordemFeature
+//Essa é estrutura (hehe) do output da função GINI
+struct giniOutput
+{
+    int feature_ID;
+    float impurity;
+    float threshold;
+    int isPositive;
+    int isLeaf;
+};
+
+
+//Criar a lista com as features e sua respctivas caracterisitcas
 struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, char*** matrizDados)
 {
-    //Declara um struct local
-    struct ordemFeature localStruct; 
+    //Declara um struct para output e um local para armazenar temporaraimente as respostas
+    struct ordemFeature outputStruct;
+    struct giniOutput giniStruct;
 
     float threshold=0;
+    float best_Threshold=-1; //Definir como -1 pois é o padrão de inicio
+
+    //Alocações
+    outputStruct.ID = da_IntArr(outputStruct.ID,numeroFeatures-2);
+    outputStruct.isLeaf = da_IntArr(outputStruct.isLeaf,numeroFeatures-2);
+    outputStruct.isPositive = da_IntArr(outputStruct.isPositive,numeroFeatures-2);
+    outputStruct.threshold = da_FloArr(outputStruct.threshold,numeroFeatures-2);
+    outputStruct.gini = da_FloArr(outputStruct.gini,numeroFeatures-2);
 
     //Vamos precisa de um buffer de matriz int para ordenar nossas features
     //O buffer tera "numeroLinhas" linhas e 2 colunas (para a feature e sua resposta)
     float** bufferListaFeatures = NULL;
 
-    //Para toda feature (menos a resposta)
+    //Para toda feature (menos a resposta e cabeçalho)
     for (int i=0;i<numeroFeatures-2;i++)
     {
-        //Ordena de menor para maior
+        //Seta best_Threshold para padrão de inicio
+        best_Threshold =-1;
+
+        //Ordena de menor para maior apartir do cabeçalho
         bufferListaFeatures = sortSTG(matrizDados,i+1,numeroLinhas,numeroFeatures);
+
+        //Calcula os thresholds
         for (int j=0; j<(numeroLinhas-2);j++)
         {
             threshold = ((bufferListaFeatures[j][0]+bufferListaFeatures[j+1][0])/2);
-            printf("--Threshold e %f\n",threshold);
-        }
 
+            //ignorar casos onde threshold = bufferListaFeatures[j][0], evitando lista pos vazias
+            if (bufferListaFeatures[j][0]!=threshold)
+            {
+                giniStruct = calcGini(i, threshold, best_Threshold, bufferListaFeatures, (numeroLinhas-1));
+                best_Threshold = giniStruct.threshold;
+            }
+        }
+        printf("--Feature %d menor impureza %f com threshold %f\n",i,giniStruct.impurity,giniStruct.threshold);
+
+        //Vamos ter que alocar para cada array da outputStruct
+        outputStruct.ID[i]=i;
+        outputStruct.isLeaf[i] = giniStruct.isLeaf;
+        outputStruct.isPositive[i] = giniStruct.isPositive;
+        outputStruct.threshold[i] = giniStruct.threshold;
+        outputStruct.gini[i] = giniStruct.impurity;
     }
 
     //Encerração da funcão (não esqueça de desalocar o bufferLista pvfr)
     
-    return localStruct;
+    return outputStruct;
 }
 
 //Essa função ordenará a lista de forma crescente, mantendo a relação com sua resposta
@@ -117,7 +161,7 @@ float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFea
         buffMatriz[i] = (float)atof(matrizDados[i+1][coluna]);
     }
 
-    //Para todas as linhas de buffMatriz, anotar menor valor e seu indice em matrizOrdenada
+    //Para todas as linhas de buffMatriz, anotar menor valor e seu indice em matrizOrdenada (Utilizei ajuda do Copilot)
     for (int i=0; i < (numeroLinhas-1); i++)
     {
         float menorNumero = 0.0f;
@@ -154,7 +198,7 @@ float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFea
     for (int i=0;i<(numeroLinhas-1);i++)
     {
         printf("matrizOrdenada[%d][0]=%f\n",i,matrizOrdenada[i][0]);
-        printf("matrizOrdenada[%d][1]=%f\n",i,matrizOrdenada[i][1]);
+        printf("matrizOrdenada[%d][1]=%.0f\n",i,matrizOrdenada[i][1]);
     }
 
     //Encerrar função e desalocar a bendita memoria
@@ -252,7 +296,13 @@ int main()
     }
 
     printf("\n\n--%c--",trainTable[1][451][0]);
-    giniImpurity(numeroLinhas,numeroFeatures,trainTable);
+    struct ordemFeature matrix = giniImpurity(numeroLinhas,numeroFeatures,trainTable);
+    matrix = sortByGini(matrix, numeroLinhas, numeroFeatures);
+
+    for (int i=0; i<numeroFeatures-2;i++)
+    {
+        printf("--matrix.gine[%d] %f\t\t--matrix.ID[%d] %d\n",i,matrix.gini[i],i,matrix.ID[i]);
+    }
 
     //Encerramento do programa
     for (int i = 0;i<numeroLinhas;i++)
@@ -280,11 +330,219 @@ int checkRepeat (int* vector, int new_entry, int sizeOf_Vector)
         if (new_entry == vector[i])
         {
             flag=1;
-            printf("\n---NUMERO %d E REPETIDO---\n",new_entry);
+            //printf("\n---NUMERO %d E REPETIDO---\n",new_entry);
         }
         else{}
     }
 
     //Se houver repetido, retorna 1;
     return flag;
+}
+
+//Função que calcula melhor gini dada uma lista de feature, use best_Threshold = -1 para condição inicial
+struct giniOutput calcGini(int ID, float threshold, float best_Threshold, float** featureTable, int lenghtOf_Table)
+{
+    struct giniOutput outputStruct;
+
+    //Os contadores
+    float counter_PrePos=0;
+    float counter_PreFal=0;
+    float counter_PosPos=0;
+    float counter_PosFal=0;
+
+    float gini_Pre =0.0;
+    float gini_Pos =0.0;
+    float gini_Final =0.0;
+    float gini_Best =0.0;
+    int is_Best =0;
+
+    //Condição de inicio
+    if (best_Threshold==-1)
+    {
+        //Percorra a mesa e incremente os contadores conforema necessario
+        for (int i=0;i<lenghtOf_Table;i++)
+        {
+            if (featureTable[i][0]<=threshold)
+            {
+                if (featureTable[i][1]==1) counter_PrePos++;
+                else counter_PreFal++;
+            }
+            else
+            {
+                if (featureTable[i][1]==1) counter_PosPos++;
+                else counter_PosFal++;
+            }
+        }
+
+        //Calcular GINI pre e pos;
+        gini_Pre = 1-pow(counter_PrePos/(counter_PreFal+counter_PrePos),2)-pow(counter_PreFal/(counter_PreFal+counter_PrePos),2);
+        gini_Pos = 1-pow((counter_PosPos/(counter_PosFal+counter_PosPos)),2)-pow(counter_PosFal/(counter_PosFal+counter_PosPos),2);
+        gini_Final= (gini_Pre*(counter_PreFal+counter_PrePos)+gini_Pos*(counter_PosFal+counter_PosPos))/lenghtOf_Table;
+
+        is_Best=1;       
+    }
+
+    else
+    {
+        //Calcular impureza de best_Threshold, reutilizarei counter_pre e pos para isso
+        for (int i=0;i<lenghtOf_Table;i++)
+        {
+            if (featureTable[i][0]<=best_Threshold)
+            {
+                if (featureTable[i][1]==1) counter_PrePos++;
+                else counter_PreFal++;
+            }
+            else
+            {
+                if (featureTable[i][1]==1) counter_PosPos++;
+                else counter_PosFal++;
+            }
+        }
+        //Calcular GINI pre e pos do best;
+        gini_Pre = 1-pow(counter_PrePos/(counter_PreFal+counter_PrePos),2)-pow(counter_PreFal/(counter_PreFal+counter_PrePos),2);
+        gini_Pos = 1-pow((counter_PosPos/(counter_PosFal+counter_PosPos)),2)-pow(counter_PosFal/(counter_PosFal+counter_PosPos),2);
+        gini_Best= (gini_Pre*(counter_PreFal+counter_PrePos)+gini_Pos*(counter_PosFal+counter_PosPos))/lenghtOf_Table;
+
+        //isPositive sera definido inicialmente como o isPositive do Best, caso o novo threshold seja melhor, sera substituido
+        if (counter_PreFal>counter_PrePos){outputStruct.isPositive=1;}
+        else {outputStruct.isPositive=0;}
+
+        if (gini_Pre<gini_Pos){outputStruct.isLeaf = 0;} //Se pre é mais puro que pos, pre é folha
+        else {outputStruct.isLeaf = 1;}                 //Se não pos é folha
+
+        //Resetar contadores
+        counter_PosFal=0; counter_PosPos=0; counter_PreFal=0; counter_PrePos=0;
+
+        //Calcular impureza do novo threshold
+        for (int i=0;i<lenghtOf_Table;i++)
+        {
+            if (featureTable[i][0]<=threshold)
+            {
+                if (featureTable[i][1]==1) counter_PrePos++;
+                else counter_PreFal++;
+            }
+            else
+            {
+                if (featureTable[i][1]==1) counter_PosPos++;
+                else counter_PosFal++;
+            }
+        }
+        gini_Pre = 1.0-pow(counter_PrePos/(counter_PreFal+counter_PrePos),2)-pow(counter_PreFal/(counter_PreFal+counter_PrePos),2);
+        gini_Pos = 1.0-pow((counter_PosPos/(counter_PosFal+counter_PosPos)),2)-pow(counter_PosFal/(counter_PosFal+counter_PosPos),2);
+        gini_Final= (gini_Pre*(counter_PreFal+counter_PrePos)+gini_Pos*(counter_PosFal+counter_PosPos))/lenghtOf_Table;
+
+        //Se o novo gini for menor que o melhor, is_Best é 1;
+        if (gini_Final<gini_Best)
+        {
+            is_Best=1;
+        }
+        else {is_Best=0;}
+    }
+
+    //Se for melhor que threshold anterior, substituir valores, se não, manter.
+    if (is_Best==1)
+    {
+        outputStruct.feature_ID = ID;
+        outputStruct.threshold = threshold;
+        outputStruct.impurity = gini_Final;
+
+        if (gini_Pre<gini_Pos){outputStruct.isLeaf = 0;} //Se pre é mais puro que pos, pre é folha
+        else {outputStruct.isLeaf = 1;}                 //Se não pos é folha
+
+        //Rodamos o .isPositive aqui pois os counter contem o valor do THR novo, assim substituindo o valor dado por best_THR
+        if (counter_PreFal>counter_PrePos){outputStruct.isPositive=1;}
+        else {outputStruct.isPositive=0;}
+    }
+
+    else
+    {
+        outputStruct.feature_ID = ID;
+        outputStruct.threshold = best_Threshold;
+        outputStruct.impurity = gini_Best;
+    }
+
+    return outputStruct;
+}
+
+//Vou usar isso para alocar vetores int
+int* da_IntArr (int* variable, int size)
+{
+    variable = (int*)malloc(size*sizeof(int));
+    if(variable == NULL)
+    {
+        printf("--Erro alocação da_IntArr");
+        getchar();
+        exit(1);
+    }
+
+    return variable;
+}
+
+//Vou usar isso para alcoar vetores float
+float* da_FloArr (float* variable, int size)
+{
+    variable = (float*)malloc(size*sizeof(float));
+    if(variable == NULL)
+    {
+        printf("--Erro alocação da_IntArr");
+        getchar();
+        exit(1);
+    }
+
+    return variable;
+}
+
+//Funcção que ordena o struct ordemFeature de acordo com gini crescente
+struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber)
+{
+    struct ordemFeature localStruct;
+    int* IDs_Excluidos = NULL;
+    float menor_Gini = 2; //Gini não pode ser maior q 1
+    int ID_Menor=0;
+    float threshold_Menor=0;
+    int isPositive_Menor=0;
+    int isLeaf_Menor=0;
+
+    //Inicialização de vetores
+    localStruct.gini = da_FloArr(localStruct.gini,featurenumber-2);
+    localStruct.threshold = da_FloArr(localStruct.threshold,featurenumber-2);
+    localStruct.ID = da_IntArr(localStruct.ID,featurenumber-2);
+    localStruct.isLeaf = da_IntArr(localStruct.isLeaf,featurenumber-2);
+    localStruct.isPositive = da_IntArr(localStruct.isPositive,featurenumber-2);
+
+    IDs_Excluidos = da_IntArr(IDs_Excluidos, featurenumber-2);
+    //Preencher matriz com ID impossiveis
+    for(int i=0;i<featurenumber-2;i++)
+    {
+        IDs_Excluidos[i]=-1;
+    }
+    
+    //Para toda feature
+    for (int i=0; i<featurenumber-2;i++)
+    {
+        menor_Gini=2;
+        //Compara todas as feautures e acha aquela com menor gini e com ID não excluido
+        for(int j=0; j<featurenumber-2;j++)
+        {
+            if(input.gini[j]<menor_Gini&&checkRepeat(IDs_Excluidos,input.ID[j], featurenumber)!=1)
+            {
+                //Anota os dados do menor gini atual
+                ID_Menor = input.ID[j];
+                menor_Gini = input.gini[j];
+                isLeaf_Menor = input.isLeaf[j];
+                isPositive_Menor = input.isPositive[j];
+                threshold_Menor = input.threshold[j];
+            }
+        }
+        //Adiciona a feature na primeria entrada junto com suas caracteristicas, e adiciona ID aos excluidos
+        IDs_Excluidos[i] = ID_Menor;
+
+        localStruct.gini[i] = menor_Gini;
+        localStruct.ID[i] = ID_Menor;
+        localStruct.isLeaf[i] = isLeaf_Menor;
+        localStruct.isPositive[i] = isPositive_Menor;
+        localStruct.threshold[i] = threshold_Menor;
+    }
+
+    return localStruct;
 }
