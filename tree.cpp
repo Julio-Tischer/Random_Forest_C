@@ -4,11 +4,10 @@
 #include <math.h>
 #include <time.h>
 #define tamanhoStrings 30
-#define respostaPositiva ('P')
+#define respostaPositiva ('P')//Aqui coloque o valor para considerar como positivo
 
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
 float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
-//Aqui coloque o valor para considerar como positivo
 
 //MEU DEUS STRUCTS SÃO MUITO TOPPPPPPPPPPPPPPP
 
@@ -28,7 +27,7 @@ struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, char*** m
     float threshold=0;
 
     //Vamos precisa de um buffer de matriz int para ordenar nossas features
-    //O buffer tera "numeroLinhas" linhas e 3 colunas (para a feature e sua resposta)
+    //O buffer tera "numeroLinhas" linhas e 2 colunas (para a feature e sua resposta)
     float** bufferListaFeatures = NULL;
 
     //Para toda feature (menos a resposta)
