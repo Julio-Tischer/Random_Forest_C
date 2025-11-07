@@ -4,7 +4,7 @@
 #include <math.h>
 #include <time.h>
 #define tamanhoStrings 30
-#define respostaPositiva ('P')//Aqui coloque o valor para considerar como positivo
+#define respostaPositiva ('1')//Aqui coloque o valor para considerar como positivo
 
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
 float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
@@ -222,7 +222,7 @@ int main()
     char charBuff;
 
     //Abrir FILE_Train
-    FILE_Train = fopen("train.csv","r");
+    FILE_Train = fopen("pd_speech_features.csv","r");
     if (FILE_Train == NULL)
     {
         printf("Erro Abertura train.csv\n");
@@ -295,7 +295,6 @@ int main()
         }
     }
 
-    printf("\n\n--%c--",trainTable[1][451][0]);
     struct ordemFeature matrix = giniImpurity(numeroLinhas,numeroFeatures,trainTable);
     matrix = sortByGini(matrix, numeroLinhas, numeroFeatures);
 
