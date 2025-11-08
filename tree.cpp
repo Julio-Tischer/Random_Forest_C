@@ -4,209 +4,40 @@
 #include <math.h>
 #include <time.h>
 #define tamanhoStrings 30
-#define respostaPositiva ('1')//Aqui coloque o valor para considerar como positivo
+#define respostaPositiva 1//Aqui coloque o valor para considerar como positivo
 
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
-float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
-float* da_FloArr (float* variable, int size);
+double** sortSTG (double** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
+double* da_DBLArr (double* variable, int size);
 int* da_IntArr (int* variable, int size);
+struct giniOutput calcGini(int ID, double threshold, double best_Threshold, double** featureTable, int lenghtOf_Table);
+struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber);
+struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, double** matrizDados);
+double** sortSTG (double** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
+void double_SuperFree(double** array, int columns);
+double** da_DBLmtx (double** variable, int rows, int colunms);
+int testStructure(struct ordemFeature input, double* testData, int featureNumber);
 
 //MEU DEUS STRUCTS SÃO MUITO TOPPPPPPPPPPPPPPP
-struct giniOutput calcGini(int ID, float threshold, float best_Threshold, float** featureTable, int lenghtOf_Table);
-struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber);
 //Esse struct armazena uma lista de ID com seus respectivos IDs e positividades (se abaixo de threshold é positivo ou falso)
 struct ordemFeature 
 {
     int* ID;
-    float* threshold;
+    double* threshold;
     int* isPositive;
     int* isLeaf;
-    float* gini;
+    double* gini;
 };
 
 //Essa é estrutura (hehe) do output da função GINI
 struct giniOutput
 {
     int feature_ID;
-    float impurity;
-    float threshold;
+    double impurity;
+    double threshold;
     int isPositive;
     int isLeaf;
 };
-
-
-//Criar a lista com as features e sua respctivas caracterisitcas
-struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, char*** matrizDados)
-{
-    //Declara um struct para output e um local para armazenar temporaraimente as respostas
-    struct ordemFeature outputStruct;
-    struct giniOutput giniStruct;
-
-    float threshold=0;
-    float best_Threshold=-1; //Definir como -1 pois é o padrão de inicio
-
-    //Alocações
-    outputStruct.ID = da_IntArr(outputStruct.ID,numeroFeatures-2);
-    outputStruct.isLeaf = da_IntArr(outputStruct.isLeaf,numeroFeatures-2);
-    outputStruct.isPositive = da_IntArr(outputStruct.isPositive,numeroFeatures-2);
-    outputStruct.threshold = da_FloArr(outputStruct.threshold,numeroFeatures-2);
-    outputStruct.gini = da_FloArr(outputStruct.gini,numeroFeatures-2);
-
-    //Vamos precisa de um buffer de matriz int para ordenar nossas features
-    //O buffer tera "numeroLinhas" linhas e 2 colunas (para a feature e sua resposta)
-    float** bufferListaFeatures = NULL;
-
-    //Para toda feature (menos a resposta e cabeçalho)
-    for (int i=0;i<numeroFeatures-2;i++)
-    {
-        //Seta best_Threshold para padrão de inicio
-        best_Threshold =-1;
-
-        //Ordena de menor para maior apartir do cabeçalho
-        bufferListaFeatures = sortSTG(matrizDados,i+1,numeroLinhas,numeroFeatures);
-
-        //Calcula os thresholds
-        for (int j=0; j<(numeroLinhas-2);j++)
-        {
-            threshold = ((bufferListaFeatures[j][0]+bufferListaFeatures[j+1][0])/2);
-
-            //ignorar casos onde threshold = bufferListaFeatures[j][0], evitando lista pos vazias
-            if (bufferListaFeatures[j][0]!=threshold)
-            {
-                giniStruct = calcGini(i, threshold, best_Threshold, bufferListaFeatures, (numeroLinhas-1));
-                best_Threshold = giniStruct.threshold;
-            }
-        }
-        printf("--Feature %d menor impureza %f com threshold %f\n",i,giniStruct.impurity,giniStruct.threshold);
-
-        //Vamos ter que alocar para cada array da outputStruct
-        outputStruct.ID[i]=i;
-        outputStruct.isLeaf[i] = giniStruct.isLeaf;
-        outputStruct.isPositive[i] = giniStruct.isPositive;
-        outputStruct.threshold[i] = giniStruct.threshold;
-        outputStruct.gini[i] = giniStruct.impurity;
-    }
-
-    //Encerração da funcão (não esqueça de desalocar o bufferLista pvfr)
-    
-    return outputStruct;
-}
-
-//Essa função ordenará a lista de forma crescente, mantendo a relação com sua resposta
-//É aqui que dizemos adeus ao cabeçalho
-float** sortSTG (char*** matrizDados,int coluna, int numeroLinhas, int numeroFeatures) 
-{
-    //Vamos criar uma lista de respostas para acompanhar nosso buffer
-    int menorNumero;
-    int indice;
-    int* listaRespostas = NULL;
-    int* indicesExcluidos = NULL;
-    float* buffMatriz = NULL;
-    float** matrizOrdenada = NULL;
-
-    //matrizOrdenada sera o valor de retorno, tera tamnanho "numerolinhas-1" por 2
-    matrizOrdenada = (float**)malloc((numeroLinhas-1)*sizeof(float*));
-    //para cada linha duas colunas
-    for (int i=0; i<(numeroLinhas-1);i++)
-    {
-        matrizOrdenada[i] = (float*)malloc(2*sizeof(float));
-    }
-
-    indicesExcluidos = (int*)malloc((numeroLinhas-1)*sizeof(int));
-    if (indicesExcluidos == NULL)
-    {
-        printf("--ERRO iexcluidos DINAMICA");
-        getchar();
-        exit(1);
-    }
-    //Vamos preencher indicesexcluidos com indices impossiveis inicalmente para não ter problemas com checkRepeat
-    for (int i=0;i<(numeroLinhas-1);i++)
-    {
-        indicesExcluidos[i]=-1;
-    }
-
-    listaRespostas = (int*)malloc((numeroLinhas-1)*sizeof(int));
-    if (listaRespostas == NULL)
-    {
-        printf("--ERRO LISTA RESPOSTA DINAMICA");
-        getchar();
-        exit(1);
-    }
-
-    //Para todas as linhas -1, o valor da resposta é o valor da matriz de dados na linha i+1 (pulando cabeçalho) na ultima coluna
-    //Se o valor da ultima coluna for o respostaPositiva, coloque como 1, se não, como 0
-    //TALVEZ DE ERRO!!!
-    for (int i =0; i<numeroLinhas-1; i++)
-    {
-        if (matrizDados[i+1][numeroFeatures-1][0] == respostaPositiva)
-        {
-            listaRespostas[i] = 1;
-        }
-        else {listaRespostas[i]=0;}
-    }
-
-    //Transformar de matrizDados[i+1][coluna] até matrizDados[numeroLinhas][coluna] em floats
-    //Para isso vamos precisar de uma matriz float "numeroLinhas-1" por 2
-    buffMatriz = (float*)malloc((numeroLinhas-1)*sizeof(float));
-    if (buffMatriz == NULL)
-    {
-        printf("--Erro buffmatrizint dinamica");
-        getchar();
-        exit (1);
-    }
-
-    //Para todas as linhas - 1, o valor de buffmatriz é o valor da da matriz de dados na linha i+1 (pulando cabeçalho) na coluna selecionada
-    for (int i =0; i<numeroLinhas-1; i++)
-    {
-        buffMatriz[i] = (float)atof(matrizDados[i+1][coluna]);
-    }
-
-    //Para todas as linhas de buffMatriz, anotar menor valor e seu indice em matrizOrdenada (Utilizei ajuda do Copilot)
-    for (int i=0; i < (numeroLinhas-1); i++)
-    {
-        float menorNumero = 0.0f;
-        int indice = -1;
-        int found = 0;
-
-        for (int j = 0; j < (numeroLinhas-1); j++)
-        {
-            if (checkRepeat(indicesExcluidos, j, i)) continue; // already used
-            if (!found)
-            {
-            menorNumero = buffMatriz[j];
-                indice = j;
-                found = 1;
-            } 
-            else if (buffMatriz[j] < menorNumero)
-            {
-                menorNumero = buffMatriz[j];
-                indice = j;
-            }
-        }
-
-    if (!found) {
-        // should not happen unless numeroLinhas<=1
-        matrizOrdenada[i][0] = 0.0f;
-        matrizOrdenada[i][1] = -1;
-        indicesExcluidos[i] = -1;
-    } else {
-        matrizOrdenada[i][0] = menorNumero;
-        matrizOrdenada[i][1] = (float)listaRespostas[indice];
-        indicesExcluidos[i] = indice;
-    }
-    }
-    for (int i=0;i<(numeroLinhas-1);i++)
-    {
-        printf("matrizOrdenada[%d][0]=%f\n",i,matrizOrdenada[i][0]);
-        printf("matrizOrdenada[%d][1]=%.0f\n",i,matrizOrdenada[i][1]);
-    }
-
-    //Encerrar função e desalocar a bendita memoria
-    free(indicesExcluidos);
-    free(listaRespostas);
-    free(buffMatriz);
-    return matrizOrdenada;
-}
 
 int main()
 {
@@ -216,13 +47,15 @@ int main()
 
     int numeroFeatures=0;
     int numeroLinhas=0;
+    int testeLinhas=0;
 
-    //Matriz de string que armazena conteudo de uma dada linha e coluna
-    char*** trainTable = NULL;
+    //Matriz de double que armazena conteudo de uma dada linha e coluna
+    double** trainTable = NULL;
+    double** testTable = NULL;
     char charBuff;
 
     //Abrir FILE_Train
-    FILE_Train = fopen("pd_speech_features.csv","r");
+    FILE_Train = fopen("pretreino.csv","r");
     if (FILE_Train == NULL)
     {
         printf("Erro Abertura train.csv\n");
@@ -250,35 +83,8 @@ int main()
     rewind(FILE_Train);
 
     //Alocar linhas e colunas
-    trainTable = (char***)malloc(numeroLinhas*sizeof(char**));
-    if (trainTable==NULL)
-    {
-        printf("ERRO aDN table");
-        exit (1);
-    }
-
-    for (int i=0; i<numeroLinhas; i++)
-    {
-        trainTable[i] = (char**)malloc(numeroFeatures*sizeof(char*));
-        if (trainTable[i]==NULL)
-        {
-            printf("ERRO aDN table[i]");
-            exit (1);
-        }
-
-        //Alocar uma quantidade de caracteres para cada string
-        for(int j=0; j<numeroFeatures; j++)
-        {
-            trainTable[i][j] = (char*)malloc(tamanhoStrings*sizeof(char));
-            if (trainTable[i][j]==NULL)
-            {
-                printf("ERRO aDN table[i][j]");
-                exit (1);
-            }
-
-        }
-    }
-    printf("-- Matriz de strings de tamanho[%d][%d] alocada\n",numeroLinhas,numeroFeatures);
+    trainTable = da_DBLmtx(trainTable, numeroLinhas, numeroFeatures);
+    printf("-- Matriz de treino de tamanho[%d][%d] alocada\n",numeroLinhas,numeroFeatures);
 
     //Preencher a matriz com os valores
     //Utilizei Copilot para me ajudar com o scanf
@@ -286,11 +92,14 @@ int main()
     {
         for(int j=0;j<numeroFeatures;j++)
         {
-            //Se for a ultima feature, deve procurar até \n
-            if (j < numeroFeatures-1) {
-                fscanf(FILE_Train,"%[^,],",trainTable[i][j]);
-            } else {
-                fscanf(FILE_Train,"%[^\n]\n",trainTable[i][j]);
+            //Se for a ultima feature, ler um double e consumir um \n
+            if (j < numeroFeatures-1)
+            {
+                fscanf(FILE_Train,"%lf,",&trainTable[i][j]);
+            } 
+            else
+            {
+                fscanf(FILE_Train,"%lf\n",&trainTable[i][j]);
             }
         }
     }
@@ -303,19 +112,60 @@ int main()
         printf("--matrix.gine[%d] %f\t\t--matrix.ID[%d] %d\n",i,matrix.gini[i],i,matrix.ID[i]);
     }
 
-    //Encerramento do programa
-    for (int i = 0;i<numeroLinhas;i++)
+    //Inicializar arquivo de teste
+    FILE_test = fopen("Testamento.csv","r");
+
+    //Contar numero de linhas
+    charBuff='0';
+    while (charBuff != EOF)
     {
-        for(int j =0; j<numeroFeatures; j++)
-        {
-            free(trainTable[i][j]);
-        }
-        free(trainTable[i]);
+        charBuff = fgetc(FILE_test);
+        if (charBuff == '\n'){testeLinhas++;}
     }
-    free(trainTable);
+    printf("--%d Linhas detectadas no arquivo de teste\n",testeLinhas);
+    rewind(FILE_test);
+
+    //Criar um vetor para armazenar valores de teste
+    //FILE* debug = fopen("remover.csv","w");
+    testTable = da_DBLmtx(testTable, testeLinhas, numeroFeatures);
+    printf("-- Matriz de teste de tamanho[%d][%d] alocada\n",testeLinhas,numeroFeatures);
+    
+    for (int i=0; i<testeLinhas;i++)
+    {
+        for(int j=0;j<numeroFeatures;j++)
+        {
+            //Se for a ultima feature, ler um double e consumir um \n
+            if (j < numeroFeatures-1)
+            {
+                fscanf(FILE_test,"%lf,",&testTable[i][j]);
+            } 
+            else
+            {
+                fscanf(FILE_test,"%lf\n",&testTable[i][j]);
+            }
+        }
+    }
+
+    //printf("--testTable ultimo %d",(int)testTable[1][numeroFeatures-1]);
+    
+    //Para toda linha de teste, testar e contar acertos
+    int acertos=0;
+    for (int i=0; i<testeLinhas;i++)
+    {
+        if(testStructure(matrix, testTable[i],numeroFeatures)==1)
+        {
+            acertos++;
+        }
+    }
+    printf("\n--Foram feitas %d previsoes corretas de %d, com precisao de %.2f%%",acertos, testeLinhas, (100.0*acertos/testeLinhas));
+
+    //Encerrção
+    double_SuperFree(trainTable,numeroLinhas);
 
     getchar(); //para terminal não fechar sozinho
     fclose(FILE_Train);
+    fclose(FILE_test);
+    //fclose(debug);
     return 0;
 }
 
@@ -339,20 +189,20 @@ int checkRepeat (int* vector, int new_entry, int sizeOf_Vector)
 }
 
 //Função que calcula melhor gini dada uma lista de feature, use best_Threshold = -1 para condição inicial
-struct giniOutput calcGini(int ID, float threshold, float best_Threshold, float** featureTable, int lenghtOf_Table)
+struct giniOutput calcGini(int ID, double threshold, double best_Threshold, double** featureTable, int lenghtOf_Table)
 {
     struct giniOutput outputStruct;
 
     //Os contadores
-    float counter_PrePos=0;
-    float counter_PreFal=0;
-    float counter_PosPos=0;
-    float counter_PosFal=0;
+    double counter_PrePos=0;
+    double counter_PreFal=0;
+    double counter_PosPos=0;
+    double counter_PosFal=0;
 
-    float gini_Pre =0.0;
-    float gini_Pos =0.0;
-    float gini_Final =0.0;
-    float gini_Best =0.0;
+    double gini_Pre =0.0;
+    double gini_Pos =0.0;
+    double gini_Final =0.0;
+    double gini_Best =0.0;
     int is_Best =0;
 
     //Condição de inicio
@@ -477,10 +327,10 @@ int* da_IntArr (int* variable, int size)
     return variable;
 }
 
-//Vou usar isso para alcoar vetores float
-float* da_FloArr (float* variable, int size)
+//Vou usar isso para alcoar vetores double
+double* da_DBLArr (double* variable, int size)
 {
-    variable = (float*)malloc(size*sizeof(float));
+    variable = (double*)malloc(size*sizeof(double));
     if(variable == NULL)
     {
         printf("--Erro alocação da_IntArr");
@@ -491,20 +341,58 @@ float* da_FloArr (float* variable, int size)
     return variable;
 }
 
+//Aloca uma matriz de double
+double** da_DBLmtx (double** variable, int rows, int colunms)
+{
+    variable = (double**)malloc(rows*sizeof(double*));
+    if (variable==NULL)
+    {
+        printf("--Erro da_DBLmtx");
+        getchar();
+        exit(0);
+    }
+    
+    for(int i=0;i<rows;i++)
+    {
+        variable[i]=(double*)malloc(colunms*sizeof(double));
+
+        if(variable[i]==NULL)
+        {
+            printf("--Erro da_DBLmtx[i]");
+            getchar();
+            exit(0);
+        }
+    }
+    return variable;
+}
+
+//Desaloca uma matriz
+void double_SuperFree(double** array, int rows)
+{
+        //Para todas as colunas, desalocar
+        for (int i=0;i<rows;i++)
+        {
+            free(array[i]);
+        }
+
+    //Desalocar linhas
+    free(array);
+}
+
 //Funcção que ordena o struct ordemFeature de acordo com gini crescente
 struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber)
 {
     struct ordemFeature localStruct;
     int* IDs_Excluidos = NULL;
-    float menor_Gini = 2; //Gini não pode ser maior q 1
+    double menor_Gini = 2; //Gini não pode ser maior q 1
     int ID_Menor=0;
-    float threshold_Menor=0;
+    double threshold_Menor=0;
     int isPositive_Menor=0;
     int isLeaf_Menor=0;
 
     //Inicialização de vetores
-    localStruct.gini = da_FloArr(localStruct.gini,featurenumber-2);
-    localStruct.threshold = da_FloArr(localStruct.threshold,featurenumber-2);
+    localStruct.gini = da_DBLArr(localStruct.gini,featurenumber-2);
+    localStruct.threshold = da_DBLArr(localStruct.threshold,featurenumber-2);
     localStruct.ID = da_IntArr(localStruct.ID,featurenumber-2);
     localStruct.isLeaf = da_IntArr(localStruct.isLeaf,featurenumber-2);
     localStruct.isPositive = da_IntArr(localStruct.isPositive,featurenumber-2);
@@ -544,4 +432,251 @@ struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int fe
     }
 
     return localStruct;
+}
+
+//Criar a lista com as features e sua respctivas caracterisitcas
+struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, double** matrizDados)
+{
+    //Declara um struct para output e um local para armazenar temporaraimente as respostas
+    struct ordemFeature outputStruct;
+    struct giniOutput giniStruct;
+
+    double threshold=0;
+    double best_Threshold=-1; //Definir como -1 pois é o padrão de inicio
+
+    //Alocações
+    outputStruct.ID = da_IntArr(outputStruct.ID,numeroFeatures-2);
+    outputStruct.isLeaf = da_IntArr(outputStruct.isLeaf,numeroFeatures-2);
+    outputStruct.isPositive = da_IntArr(outputStruct.isPositive,numeroFeatures-2);
+    outputStruct.threshold = da_DBLArr(outputStruct.threshold,numeroFeatures-2);
+    outputStruct.gini = da_DBLArr(outputStruct.gini,numeroFeatures-2);
+
+    //Vamos precisa de um buffer de matriz int para ordenar nossas features
+    //O buffer tera "numeroLinhas" linhas e 2 colunas (para a feature e sua resposta)
+    double** bufferListaFeatures = NULL;
+
+    //Para toda feature (menos a resposta)
+    for (int i=0;i<numeroFeatures-1;i++)
+    {
+        //Seta best_Threshold para padrão de inicio
+        best_Threshold =-1;
+
+        //Ordena de menor para maior apartir do cabeçalho
+        bufferListaFeatures = sortSTG(matrizDados,i,numeroLinhas,numeroFeatures);
+
+        //Calcula os thresholds
+        //Tem que ter -1 por que nn se calcula do ultimo
+        for (int j=0; j<(numeroLinhas-1);j++)
+        {
+            threshold = ((bufferListaFeatures[j][0]+bufferListaFeatures[j+1][0])/2);
+
+            //ignorar casos onde threshold = bufferListaFeatures[j][0], evitando lista pos vazias
+            if (bufferListaFeatures[j][0]!=threshold)
+            {
+                giniStruct = calcGini(i, threshold, best_Threshold, bufferListaFeatures, (numeroLinhas));
+                best_Threshold = giniStruct.threshold;
+            }
+        }
+        printf("--Feature %d menor impureza %f com threshold %f\n",i,giniStruct.impurity,giniStruct.threshold);
+
+        //Vamos ter que alocar para cada array da outputStruct
+        outputStruct.ID[i]=i;
+        outputStruct.isLeaf[i] = giniStruct.isLeaf;
+        outputStruct.isPositive[i] = giniStruct.isPositive;
+        outputStruct.threshold[i] = giniStruct.threshold;
+        outputStruct.gini[i] = giniStruct.impurity;
+    }
+
+    //Encerração da funcão (não esqueça de desalocar o bufferLista pvfr)
+    
+    return outputStruct;
+}
+
+//Essa função ordenará a lista de forma crescente, mantendo a relação com sua resposta
+//É aqui que dizemos adeus ao cabeçalho
+double** sortSTG (double** matrizDados,int coluna, int numeroLinhas, int numeroFeatures) 
+{
+    //Vamos criar uma lista de respostas para acompanhar nosso buffer
+    int menorNumero;
+    int indice;
+    int* listaRespostas = NULL;
+    int* indicesExcluidos = NULL;
+    double* buffMatriz = NULL;
+    double** matrizOrdenada = NULL;
+
+    //matrizOrdenada sera o valor de retorno, tera tamnanho "numerolinhas" por 2
+    matrizOrdenada = (double**)malloc((numeroLinhas)*sizeof(double*));
+    //para cada linha duas colunas
+    for (int i=0; i<(numeroLinhas);i++)
+    {
+        matrizOrdenada[i] = (double*)malloc(2*sizeof(double));
+    }
+
+    indicesExcluidos = (int*)malloc((numeroLinhas)*sizeof(int));
+    if (indicesExcluidos == NULL)
+    {
+        printf("--ERRO iexcluidos DINAMICA");
+        getchar();
+        exit(1);
+    }
+    //Vamos preencher indicesexcluidos com indices impossiveis inicalmente para não ter problemas com checkRepeat
+    for (int i=0;i<(numeroLinhas);i++)
+    {
+        indicesExcluidos[i]=-1;
+    }
+
+    listaRespostas = (int*)malloc((numeroLinhas)*sizeof(int));
+    if (listaRespostas == NULL)
+    {
+        printf("--ERRO LISTA RESPOSTA DINAMICA");
+        getchar();
+        exit(1);
+    }
+
+    //Para todas as linhas, o valor da resposta é o valor da matriz de dados na linha i+1 (pulando cabeçalho) na ultima coluna
+    //Se o valor da ultima coluna for o respostaPositiva, coloque como 1, se não, como 0
+    //TALVEZ DE ERRO!!!
+    for (int i =0; i<numeroLinhas; i++)
+    {
+        if (matrizDados[i][numeroFeatures-1] == respostaPositiva)
+        {
+            listaRespostas[i] = 1;
+        }
+        else {listaRespostas[i]=0;}
+    }
+
+    //Transformar de matrizDados[i+1][coluna] até matrizDados[numeroLinhas][coluna] em doubles
+    //Para isso vamos precisar de uma matriz double "numeroLinhas" por 2
+    buffMatriz = (double*)malloc((numeroLinhas)*sizeof(double));
+    if (buffMatriz == NULL)
+    {
+        printf("--Erro buffmatrizint dinamica");
+        getchar();
+        exit (1);
+    }
+
+    //Para todas as linhas, o valor de buffmatriz é o valor da da matriz de dados na linha i na coluna selecionada
+    for (int i =0; i<numeroLinhas; i++)
+    {
+        buffMatriz[i] = matrizDados[i][coluna];
+    }
+
+    //Para todas as linhas de buffMatriz, anotar menor valor e seu indice em matrizOrdenada (Utilizei ajuda do Copilot)
+    for (int i=0; i < (numeroLinhas); i++)
+    {
+        double menorNumero = 0.0f;
+        int indice = -1;
+        int found = 0;
+
+        for (int j = 0; j < (numeroLinhas); j++)
+        {
+            if (checkRepeat(indicesExcluidos, j, i)) continue; // already used
+            if (!found)
+            {
+            menorNumero = buffMatriz[j];
+                indice = j;
+                found = 1;
+            } 
+            else if (buffMatriz[j] < menorNumero)
+            {
+                menorNumero = buffMatriz[j];
+                indice = j;
+            }
+        }
+
+    if (!found) {
+        // should not happen unless numeroLinhas<=1
+        matrizOrdenada[i][0] = 0.0f;
+        matrizOrdenada[i][1] = -1;
+        indicesExcluidos[i] = -1;
+    } else {
+        matrizOrdenada[i][0] = menorNumero;
+        matrizOrdenada[i][1] = (double)listaRespostas[indice];
+        indicesExcluidos[i] = indice;
+    }
+    }
+    for (int i=0;i<(numeroLinhas);i++)
+    {
+        printf("matrizOrdenada[%d][0]=%f\n",i,matrizOrdenada[i][0]);
+        printf("matrizOrdenada[%d][1]=%.0f\n",i,matrizOrdenada[i][1]);
+    }
+
+    //Encerrar função e desalocar a bendita memoria
+    free(indicesExcluidos);
+    free(listaRespostas);
+    free(buffMatriz);
+    return matrizOrdenada;
+}
+
+//É aqui
+//A fronteira final
+//A desilusão dos testes
+int testStructure(struct ordemFeature input, double* testData, int featureNumber)
+{
+    int anwsered=0;
+    int questionID=0;
+    int featureRequested;
+    double currentValue;
+    int anwser;
+
+    printf("\n--Valor real e %d\n", (int)testData[featureNumber-1]);
+
+    while (anwsered==0)
+    {
+        featureRequested = input.ID[questionID];
+        currentValue = testData[featureRequested];
+        printf("--- Current value:%f\tthreshold,isPos,isLeaf:%f, %d, %d\n",currentValue,input.threshold[questionID],input.isPositive[questionID],input.isLeaf[questionID]);
+
+        //Testa se ele cai antes do limite e se caiu na folha
+        if (currentValue<input.threshold[questionID]&&input.isLeaf[questionID]==0)
+        {
+            //Verificar se pré e positivo ou negativo
+            if (input.isPositive[questionID]==0)
+            {
+                printf("--Resposta: Positiva\n");
+                anwser=1;
+                anwsered=1;
+            }
+            else
+            {
+                printf("--Resposta: Negativa\n");
+                anwser=0;
+                anwsered=1;
+            }
+        }
+        //Teste para se folha positiva
+        else if (currentValue>input.threshold[questionID]&&input.isLeaf[questionID]==1)
+        {
+            //Verificar se pré e positivo ou negativo
+            if (input.isPositive[questionID]==1)
+            {
+                printf("--Resposta: Positiva\n");
+                anwser=1;
+                anwsered=1;
+            }
+            else
+            {
+                printf("--Resposta: Negativa\n");
+                anwser=0;
+                anwsered=1;
+            }
+        }
+        //Caso não cai em uma folha, ir para proximo teste
+        else
+        {
+            printf("--%d Teste feito\n",questionID+1);
+            questionID++;
+        }
+    }
+
+    if (anwser==(int)testData[featureNumber-1])
+    {
+        printf("--Previsao acertou!!!\n");
+        return 1;
+    }
+    else
+    {
+        printf("--Previsao errou ;(\n");
+        return 0;
+    }
 }
