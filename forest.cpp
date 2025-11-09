@@ -12,18 +12,18 @@
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //Coloque aqui as variaveis para as arvores
-#define TREE_NUMBER 50
+#define TREE_NUMBER 100
 #define SAMPLE_SIZE 50
 #define FEATURES_PER_TREE 50
-#define MIN_SAMPLES_PER_NODE 25
+#define MIN_SAMPLES_PER_NODE 15
 #define SMALLEST_VALUE_OF_DATA -1000
-#define NODE_LIMIT 30
+#define NODE_LIMIT 48
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //foreshadowing de funções (estilo AoT)
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
-int testStructure(struct ordemFeature input, double* testData, int featureNumber);
+int testStructure(struct Tree tree, double* testData, int featureNumber);
 int* da_IntArr (int* variable, int size);
 int* rndList(int sizeof_List, int maxNumber, int minNumber);
 
@@ -215,14 +215,45 @@ int main()
         free(local_Features);
     }
 
+    //Para toda linha de teste
+    int acertos=0;
+    for (int i=0;i<testeLinhas;i++)
+    {
+        int positivos=0;
+        int resposta=0;
+        int invalidas=0;
+        //Para todas as arvores
+        for(int j=0;j<TREE_NUMBER;j++)
+        {
+            //Anotar quantas arvores foram positivas
+            if(testStructure(forest[j],testTable[i],numeroFeatures)==1){positivos++;}
+
+            //Anotar quantas arvores são invalidas
+            else if(testStructure(forest[j],testTable[i],numeroFeatures)==-1){invalidas++;}
+        }
+        if (positivos>(TREE_NUMBER-invalidas)/2)
+        {
+            resposta=1;
+        }
+        else{resposta=0;}
+
+        //Verificar se arvore acertou previsão
+        if (resposta==testTable[i][numeroFeatures-1])
+        {
+            acertos++;
+        }
+        printf("\n--%d arvores de %d deram resposta positiva. %f%%\n. \n--Arvores invalidas:%d",positivos,TREE_NUMBER-invalidas,100.0*positivos/(TREE_NUMBER-invalidas),invalidas);
+    }
+    printf("\n\n--Foram feitos %d acertos de %d. Precisao final de %f%%",acertos,testeLinhas,100.0*acertos/testeLinhas);
+
     //---------------------------------------------------------------------------------------------//
 
     //Encerrção do codigo
     double_SuperFree(dataTable,numeroLinhas);
     //para terminal não fechar sozinho
-    getchar(); 
     fclose(FILE_Train);
     fclose(FILE_test);
+    getchar(); 
     return 0;
 }
 
@@ -513,74 +544,79 @@ struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int fe
 //É aqui
 //A fronteira final
 //A desilusão dos testes
-int testStructure(struct ordemFeature input, double* testData, int featureNumber)
+int testStructure(struct Tree tree, double* testData, int featureNumber)
 {
     int anwsered=0;
     int questionID=0;
     int featureRequested;
     double currentValue;
-    int anwser;
+    int anwser=0;
+    int currentNode=0;
 
-    printf("\n--Valor real e %d\n", (int)testData[featureNumber-1]);
+    //printf("\n--Valor real e %d\n", (int)testData[featureNumber-1]);
 
     while (anwsered==0)
     {
-        featureRequested = input.ID[questionID];
-        currentValue = testData[featureRequested];
-        printf("--- Current value:%f\tthreshold,isPos,isLeaf:%f, %d, %d\n",currentValue,input.threshold[questionID],input.isPositive[questionID],input.isLeaf[questionID]);
+        featureRequested = tree.galhos[currentNode].test_ID;
 
-        //Testa se ele cai antes do limite e se caiu na folha
-        if (currentValue<input.threshold[questionID]&&input.isLeaf[questionID]==0)
+        //Isto é porquice para não cagar tudo
+        if (currentNode>=NODE_LIMIT-1){
+            return -1;
+        }
+        currentValue = testData[featureRequested];
+        //printf("--- Current value:%f\tthreshold,isPos:%f, %d\n",currentValue,tree.galhos[currentNode].threshold,tree.galhos[currentNode].isPositive);
+
+        //Testa se ele cai antes ou depois do limite
+        if (currentValue<tree.galhos[currentNode].threshold)
         {
-            //Verificar se pré e positivo ou negativo
-            if (input.isPositive[questionID]==0)
+            //Se for pré, verifcar se for folha, se não, ir para proximo node
+            if (tree.galhos[currentNode].left_Node==-1&&tree.galhos[currentNode].right_Node==-1)
             {
-                printf("--Resposta: Positiva\n");
-                anwser=1;
-                anwsered=1;
+                //Se isPos=0, significa que menor que threshold no galho é positivo
+                if (tree.galhos[currentNode].isPositive==0)
+                {
+                    anwser=1;
+                    anwsered=1;
+                }
+                else
+                {
+                    anwser=0;
+                    anwsered=1;
+                }
             }
             else
             {
-                printf("--Resposta: Negativa\n");
-                anwser=0;
-                anwsered=1;
+                currentNode=tree.galhos[currentNode].left_Node;
             }
         }
-        //Teste para se folha positiva
-        else if (currentValue>input.threshold[questionID]&&input.isLeaf[questionID]==1)
-        {
-            //Verificar se pré e positivo ou negativo
-            if (input.isPositive[questionID]==1)
-            {
-                printf("--Resposta: Positiva\n");
-                anwser=1;
-                anwsered=1;
-            }
-            else
-            {
-                printf("--Resposta: Negativa\n");
-                anwser=0;
-                anwsered=1;
-            }
-        }
-        //Caso não cai em uma folha, ir para proximo teste
+
+        //Se for maior que limite cai aqui
         else
         {
-            printf("--%d Teste feito\n",questionID+1);
-            questionID++;
+            //verificar se é folha
+            if (tree.galhos[currentNode].left_Node==-1&&tree.galhos[currentNode].right_Node==-1)
+            {
+                //Se isPos=0, resposta para limite menor q valor é negativo
+                if (tree.galhos[currentNode].isPositive==0)
+                {
+                    anwser=0;
+                    anwsered=1;
+                }
+                else
+                {
+                    anwser=1;
+                    anwsered=1;
+                }
+            }
+            else
+            {
+                currentNode=tree.galhos[currentNode].right_Node;
+            }
         }
+
     }
 
-    if (anwser==(int)testData[featureNumber-1])
-    {
-        printf("--Previsao acertou!!!\n");
-        return 1;
-    }
-    else
-    {
-        printf("--Previsao errou ;(\n");
-        return 0;
-    }
+    return anwser;
 }
 
 //Cria um lista aleatoria de tamanho e numero limite especificado
@@ -628,12 +664,12 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
     double bestThreshold;
     double bestGini=2;      //2 é um bom valor de inicio, ja que gini vai até 1(?)
 
-    node = (TNode*)malloc(FEATURES_PER_TREE*sizeof(TNode));
+    node = (TNode*)malloc(NODE_LIMIT*sizeof(TNode));
 
     //Eu não sei se é possivel prever quantidade de nos de uma arvore, mas sei que seu tamnhop maximo é a quantidade de features. Eu acho
     //Isso vai armazenar as samples e features de cada nó e quantidade de samples por linha , e inicia a do primeiro
-    int** samples_Matrix = da_Intmtx(samples_Matrix,FEATURES_PER_TREE,FEATURES_PER_TREE);
-    int* sample_Amount = da_IntArr(sample_Amount,FEATURES_PER_TREE);
+    int** samples_Matrix = da_Intmtx(samples_Matrix,NODE_LIMIT+FEATURES_PER_TREE,NODE_LIMIT+FEATURES_PER_TREE);
+    int* sample_Amount = da_IntArr(sample_Amount,NODE_LIMIT+FEATURES_PER_TREE);
     sample_Amount[0] = SAMPLE_SIZE;
     for (int i=0;i<SAMPLE_SIZE;i++)
     {
