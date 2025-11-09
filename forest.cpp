@@ -13,7 +13,7 @@
 
 //Coloque aqui as variaveis para as arvores
 #define TREE_NUMBER 100
-#define SAMPLE_SIZE 50
+#define SAMPLE_SIZE 80
 #define FEATURES_PER_TREE 50
 #define MIN_SAMPLES_PER_NODE 15
 #define SMALLEST_VALUE_OF_DATA -1000
@@ -560,7 +560,7 @@ int testStructure(struct Tree tree, double* testData, int featureNumber)
         featureRequested = tree.galhos[currentNode].test_ID;
 
         //Isto é porquice para não cagar tudo
-        if (currentNode>=NODE_LIMIT-1){
+        if (currentNode>=NODE_LIMIT-2){
             return -1;
         }
         currentValue = testData[featureRequested];
