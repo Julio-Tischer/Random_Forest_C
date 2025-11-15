@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -12,12 +13,11 @@
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //Coloque aqui as variaveis para as arvores
-#define TREE_NUMBER 100
-#define SAMPLE_SIZE 300
-#define FEATURES_PER_TREE 100
-#define MIN_SAMPLES_PER_NODE 70
-#define NODE_LIMIT 48
-#define GINI_LIMIT 0.00
+#define TREE_NUMBER 600                 //Quantas arvores a serem feitas (+ = +tempo)
+#define SAMPLE_SIZE 50                  //Quantas samples por arvore (+ = +tempo)
+#define FEATURES_PER_TREE 50            //Quantas features por arvore(+ = +tempo)
+#define MIN_SAMPLES_PER_NODE 5          //Minimo da samples para um nó ser considerado uma folha(+ = -tempo)
+#define NODE_LIMIT 50                   //Limite de nós de uma arvore, não diminui o tempo de processamento AO MENOS que seja um valor muito baixo (<15), mas aumenta qtd de arvores invalidadas
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
@@ -237,10 +237,18 @@ int main()
     //---------------------------------------------------------------------------------------------//
 
     //Encerrção do codigo
-    double_SuperFree(dataTable,numeroLinhas);
-    //para terminal não fechar sozinho
     fclose(FILE_Train);
     fclose(FILE_test);
+
+    double_SuperFree(dataTable,numeroLinhas);
+    double_SuperFree(testTable,testeLinhas);
+
+    for(int i = 0; i < TREE_NUMBER; i++) {
+        free(forest[i].galhos);
+    }
+    free(forest);
+    
+    //para terminal não fechar sozinho
     getchar(); 
     return 0;
 }
@@ -260,6 +268,8 @@ int checkRepeat (int* vector, int new_entry, int sizeOf_Vector)
         }
         else{}
     }
+
+    
 
     //Se houver repetido, retorna 1;
     return flag;
@@ -369,9 +379,39 @@ struct giniOutput calcGini(int ID, double threshold, double best_Threshold, TVal
         outputStruct.threshold = threshold;
         outputStruct.impurity = gini_Final;
 
+        if (gini_Final==0)
+        {
+            printf("asd");
+        }
+
         //Rodamos o .isPositive aqui pois os counter contem o valor do THR novo, assim substituindo o valor dado por best_THR
-        if (counter_PreFal>counter_PrePos){outputStruct.isPositive=1;}
-        else {outputStruct.isPositive=0;}
+        // isPos em 2 significa que qualquer valor do nó é positivo, -1 que qualquer valor do no é negativo
+        //Se a pre negativo e pos positivo
+        if (counter_PreFal>counter_PrePos && counter_PosFal<=counter_PosPos)
+        {
+            outputStruct.isPositive=1;
+        }
+        //Se pre positivo e pos negativo
+        else if (counter_PreFal<=counter_PrePos && counter_PosFal>counter_PosPos)
+        {
+            outputStruct.isPositive=0;
+        }
+        //Se pre E pos negativos
+        else if(counter_PreFal>counter_PrePos && counter_PosFal>counter_PosPos)
+        {
+            outputStruct.isPositive=-1;
+        }
+        //Se pre E pos positivos
+        else if(counter_PreFal<=counter_PrePos && counter_PosFal<=counter_PosPos)
+        {
+            outputStruct.isPositive=2;
+        }
+        else 
+        {
+            printf("\n\nOh fiddlesticks, what now?");
+            getchar();
+            exit(1);
+        }
     }
 
     else
@@ -497,10 +537,22 @@ int testStructure(struct Tree tree, double* testData, int featureNumber)
             return -1;
         }
         currentValue = testData[featureRequested];
-        //printf("--- Current value:%f\tthreshold,isPos:%f, %d\n",currentValue,tree.galhos[currentNode].threshold,tree.galhos[currentNode].isPositive);
+
+        //Primeiro analise se a folha é garantida POS ou garantida NEG
+        if (tree.galhos[currentNode].isPositive==2)
+        {
+            anwser=1;
+            anwsered=1;
+        }
+
+        else if (tree.galhos[currentNode].isPositive==-1)
+        {
+            anwser=0;
+            anwsered=1;
+        }
 
         //Testa se ele cai antes ou depois do limite
-        if (currentValue<tree.galhos[currentNode].threshold)
+        else if (currentValue<tree.galhos[currentNode].threshold)
         {
             //Se for pré, verifcar se for folha, se não, ir para proximo node
             if (tree.galhos[currentNode].left_Node==-1&&tree.galhos[currentNode].right_Node==-1)
@@ -546,7 +598,6 @@ int testStructure(struct Tree tree, double* testData, int featureNumber)
                 currentNode=tree.galhos[currentNode].right_Node;
             }
         }
-
     }
 
     return anwser;
@@ -635,6 +686,10 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             bestThreshold=-1;
 
             //Ordenar de forma crescente
+            if (sample_Amount<0)
+            {
+                perror("");
+            }
             orderedList = sortFeature(dataMatrix,feature_List[i],samples_Matrix[currentNode],sample_Amount[currentNode],feature_Number);
             
             //Para todo threshold (Em uma lista, temos numero de samples do nó-1 thresholds possiveis)
@@ -647,16 +702,27 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
                     threshold = (orderedList[j].value+orderedList[j+1].value)/2;
                     giniStruct = calcGini(feature_List[i],threshold,bestThreshold,orderedList,sample_Amount[currentNode]);
                     bestThreshold = giniStruct.threshold;
+                    if (giniStruct.impurity==0)
+                    {
+                        break;
+                    }
                 }
             }
-            //Se a nova impuridade for a melhor até agora, e a features não foi usada, anotar suas informações e impuridade não esta abaixo do limite
-            if (giniStruct.impurity<bestGini && checkRepeat(usedFeatures,giniStruct.feature_ID,nodeCount)!=1 && giniStruct.impurity>GINI_LIMIT);
+            //Se a nova impuridade for a melhor até agora, e a features não foi usada, anotar suas informações
+            // && checkRepeat(usedFeatures,giniStruct.feature_ID,nodeCount)!=1
+            if (giniStruct.impurity==0||(giniStruct.impurity<bestGini))
             {
                 bestFeature = giniStruct.feature_ID;
                 bestGini = giniStruct.impurity;
                 isPositive = giniStruct.isPositive;
                 final_Threshold = giniStruct.threshold;
             }
+            if (bestGini==0)
+            {
+                break;
+            }
+            //Libererar orderedList antes de alocar a proxima
+            free(orderedList);
         }
         //Neste ponto, para um dado nó, ja foi encontrada sua melhor feature, agora, vamos criar o nó
         node[currentNode].gini = bestGini;
@@ -667,8 +733,8 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
         node[currentNode].right_Node = nodeCount+2;
         usedFeatures[currentNode] = bestFeature;
 
-        //Se o nó tiver muitas poucas samples, ele não deve criar outros pors é uma folha, demarcado por seus nós adjacentes serem -1
-        if (sample_Amount[currentNode]<MIN_SAMPLES_PER_NODE)
+        //Se o nó tiver muitas poucas samples, OU ele tiver impureza 0, ele não deve criar outros pois é uma folha, demarcado por seus nós adjacentes serem -1
+        if (sample_Amount[currentNode]<MIN_SAMPLES_PER_NODE|| bestGini==0)
         {
             node[currentNode].left_Node = -1;
             node[currentNode].right_Node = -1;
@@ -709,7 +775,7 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
         }
         //Proxima Node
         printf("\n\n----------------------------------------\nNode %d:\tImpureza:%f\tFeature:%d\tSamples:%d\n",currentNode,bestGini,bestFeature,sample_Amount[currentNode]);
-        printf("No esquerdo:%d\tNo direito:%d\n",node[currentNode].left_Node,node[currentNode].right_Node);
+        printf("No esquerdo:%d\tNo direito:%d\tIsPositive:%d\tThreshold:%f\n",node[currentNode].left_Node,node[currentNode].right_Node,node[currentNode].isPositive,node[currentNode].threshold);
         currentNode++;
         //Se o nó atual é maior que a qauntidade de nós, signfica que a arvre esta completa
         if (currentNode>nodeCount||nodeCount>NODE_LIMIT)
@@ -718,14 +784,24 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
         }
     }
     output.galhos = node;
+
+    //Liberar a sample_matrix e sample_amount e usedFeatures
+    for(int i = 0; i < NODE_LIMIT + FEATURES_PER_TREE; i++)
+    {
+        free(samples_Matrix[i]);
+    }
+    free(samples_Matrix);
+    free(sample_Amount);
+    free(usedFeatures);
     return output;
 }
 
 struct valueAnswer* sortFeature(double** dataMatrix, int feature_ID, int* sample_List, int sample_amount, int feature_Number)
 {
     //Cria uma lista de resposta de tamanho sample_amount
-    struct valueAnswer* outPut = (struct valueAnswer*)malloc(sample_amount*sizeof(struct valueAnswer));
-    if (outPut==NULL){perror("");getchar();exit(1);}
+    struct valueAnswer* outPut = (struct valueAnswer*)malloc((sample_amount)*sizeof(struct valueAnswer));
+    if (outPut==NULL)
+    {perror("sortFeature NULLTST");getchar();exit(1);}
 
     //Cria burrfer de valueAnswer
     struct valueAnswer buffer;
@@ -737,6 +813,7 @@ struct valueAnswer* sortFeature(double** dataMatrix, int feature_ID, int* sample
         outPut[i].awnser = dataMatrix[sample_List[i]][feature_Number-1];
     }
 
+    
     //Ordenar a lista com um Bubblesort ;(
     for (int i=0; i<sample_amount;i++)
     {
