@@ -13,11 +13,11 @@
 
 //Coloque aqui as variaveis para as arvores
 #define TREE_NUMBER 100
-#define SAMPLE_SIZE 80
-#define FEATURES_PER_TREE 50
-#define MIN_SAMPLES_PER_NODE 15
-#define SMALLEST_VALUE_OF_DATA -1000
+#define SAMPLE_SIZE 300
+#define FEATURES_PER_TREE 100
+#define MIN_SAMPLES_PER_NODE 70
 #define NODE_LIMIT 48
+#define GINI_LIMIT 0.00
 
 //--------------------------------------------------------------------------------------------------------------------------//
 
@@ -36,8 +36,6 @@ void double_SuperFree(double** array, int columns);
 
 struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, int feature_Number, int sample_Number);
 struct giniOutput calcGini(int ID, double threshold, double best_Threshold, struct valueAnswer inputTable, int lenghtOf_Table);
-struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber);
-struct ordemFeature giniImpurity(int numeroLinhas, int numeroFeatures, double** matrizDados);
 struct valueAnswer* sortFeature(double** dataMatrix, int feature_ID, int* sample_List, int sample_amount, int feature_Number);
 
 //--------------------------------------------------------------------------------------------------------------------------//
@@ -60,16 +58,6 @@ typedef struct Tree
 {
     TNode* galhos;
 }TTree;
-
-//Esse struct armazena uma lista de ID com seus respectivos IDs e positividades (se abaixo de threshold é positivo ou falso)
-struct ordemFeature 
-{
-    int* ID;
-    double* threshold;
-    int* isPositive;
-    int* isLeaf;
-    double* gini;
-};
 
 //Essa é estrutura (hehe) do output da função GINI
 struct giniOutput
@@ -242,7 +230,7 @@ int main()
         {
             acertos++;
         }
-        printf("\n--%d arvores de %d deram resposta positiva. %f%%\n. \n--Arvores invalidas:%d",positivos,TREE_NUMBER-invalidas,100.0*positivos/(TREE_NUMBER-invalidas),invalidas);
+        printf("\n--%d arvores de %d deram resposta positiva. %f%%.\n--Arvores invalidas:%d\n",positivos,TREE_NUMBER-invalidas,100.0*positivos/(TREE_NUMBER-invalidas),invalidas);
     }
     printf("\n\n--Foram feitos %d acertos de %d. Precisao final de %f%%",acertos,testeLinhas,100.0*acertos/testeLinhas);
 
@@ -486,61 +474,6 @@ void double_SuperFree(double** array, int rows)
     free(array);
 }
 
-//Funcção que ordena o struct ordemFeature de acordo com gini crescente
-struct ordemFeature sortByGini(struct ordemFeature input, int lineNumber, int featurenumber)
-{
-    struct ordemFeature localStruct;
-    int* IDs_Excluidos = NULL;
-    double menor_Gini = 2; //Gini não pode ser maior q 1
-    int ID_Menor=0;
-    double threshold_Menor=0;
-    int isPositive_Menor=0;
-    int isLeaf_Menor=0;
-
-    //Inicialização de vetores
-    localStruct.gini = da_DBLArr(localStruct.gini,featurenumber-2);
-    localStruct.threshold = da_DBLArr(localStruct.threshold,featurenumber-2);
-    localStruct.ID = da_IntArr(localStruct.ID,featurenumber-2);
-    localStruct.isLeaf = da_IntArr(localStruct.isLeaf,featurenumber-2);
-    localStruct.isPositive = da_IntArr(localStruct.isPositive,featurenumber-2);
-
-    IDs_Excluidos = da_IntArr(IDs_Excluidos, featurenumber-2);
-    //Preencher matriz com ID impossiveis
-    for(int i=0;i<featurenumber-2;i++)
-    {
-        IDs_Excluidos[i]=-1;
-    }
-    
-    //Para toda feature
-    for (int i=0; i<featurenumber-2;i++)
-    {
-        menor_Gini=2;
-        //Compara todas as feautures e acha aquela com menor gini e com ID não excluido
-        for(int j=0; j<featurenumber-2;j++)
-        {
-            if(input.gini[j]<menor_Gini&&checkRepeat(IDs_Excluidos,input.ID[j], featurenumber)!=1)
-            {
-                //Anota os dados do menor gini atual
-                ID_Menor = input.ID[j];
-                menor_Gini = input.gini[j];
-                isLeaf_Menor = input.isLeaf[j];
-                isPositive_Menor = input.isPositive[j];
-                threshold_Menor = input.threshold[j];
-            }
-        }
-        //Adiciona a feature na primeria entrada junto com suas caracteristicas, e adiciona ID aos excluidos
-        IDs_Excluidos[i] = ID_Menor;
-
-        localStruct.gini[i] = menor_Gini;
-        localStruct.ID[i] = ID_Menor;
-        localStruct.isLeaf[i] = isLeaf_Menor;
-        localStruct.isPositive[i] = isPositive_Menor;
-        localStruct.threshold[i] = threshold_Menor;
-    }
-
-    return localStruct;
-}
-
 //É aqui
 //A fronteira final
 //A desilusão dos testes
@@ -560,7 +493,7 @@ int testStructure(struct Tree tree, double* testData, int featureNumber)
         featureRequested = tree.galhos[currentNode].test_ID;
 
         //Isto é porquice para não cagar tudo
-        if (currentNode>=NODE_LIMIT-2){
+        if (currentNode>=NODE_LIMIT-3||(featureRequested<0||featureRequested>featureNumber)){
             return -1;
         }
         currentValue = testData[featureRequested];
@@ -647,7 +580,7 @@ int* rndList(int sizeof_List, int maxNumber, int minNumber)
 //Constroi uma arvore
 struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, int feature_Number, int sample_Number)
 {
-    struct valueAnswer* orderedList;
+    struct valueAnswer* orderedList = NULL;
     TNode* node;
     struct giniOutput giniStruct;
     struct Tree output;
@@ -658,6 +591,7 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
     int outOf_Samples =0;
     int bestFeature;
     int isPositive;
+    int* usedFeatures;
     double final_Threshold;
 
     double threshold;
@@ -666,9 +600,16 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
 
     node = (TNode*)malloc(NODE_LIMIT*sizeof(TNode));
 
+    //Essa é uma lista que talvez resolva o problema de arvores invalidas, mas o ideal seria trabalhar com uma matriz parecida com samples_Matriz
+    usedFeatures = da_IntArr(usedFeatures,NODE_LIMIT+1);
+    for (int i=0;i<NODE_LIMIT+1;i++)
+    {
+        usedFeatures[i]=-1;
+    }
+
     //Eu não sei se é possivel prever quantidade de nos de uma arvore, mas sei que seu tamnhop maximo é a quantidade de features. Eu acho
     //Isso vai armazenar as samples e features de cada nó e quantidade de samples por linha , e inicia a do primeiro
-    int** samples_Matrix = da_Intmtx(samples_Matrix,NODE_LIMIT+FEATURES_PER_TREE,NODE_LIMIT+FEATURES_PER_TREE);
+    int** samples_Matrix = da_Intmtx(samples_Matrix,NODE_LIMIT+FEATURES_PER_TREE,SAMPLE_SIZE);
     int* sample_Amount = da_IntArr(sample_Amount,NODE_LIMIT+FEATURES_PER_TREE);
     sample_Amount[0] = SAMPLE_SIZE;
     for (int i=0;i<SAMPLE_SIZE;i++)
@@ -699,8 +640,8 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             //Para todo threshold (Em uma lista, temos numero de samples do nó-1 thresholds possiveis)
             for (int j=0 ;j<sample_Amount[currentNode]-1;j++)
             {
-                //Se dois valores seguidos da dataMatrix no ponto sampleMatrix na linha currentNode e feature atual forem iguais, não rodar
-                if (dataMatrix[samples_Matrix[currentNode][j]][feature_List[i]]==dataMatrix[samples_Matrix[currentNode][j+1]][feature_List[i]]){}
+                //Se dois valores seguidos lista ordenada forem iguais, ignorar
+                if (orderedList[j].value==orderedList[j+1].value){}
                 else 
                 {
                     threshold = (orderedList[j].value+orderedList[j+1].value)/2;
@@ -708,8 +649,8 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
                     bestThreshold = giniStruct.threshold;
                 }
             }
-            //Se a nova impuridade for a melhor até agora, anotar suas informações
-            if (giniStruct.impurity<bestGini)
+            //Se a nova impuridade for a melhor até agora, e a features não foi usada, anotar suas informações e impuridade não esta abaixo do limite
+            if (giniStruct.impurity<bestGini && checkRepeat(usedFeatures,giniStruct.feature_ID,nodeCount)!=1 && giniStruct.impurity>GINI_LIMIT);
             {
                 bestFeature = giniStruct.feature_ID;
                 bestGini = giniStruct.impurity;
@@ -724,14 +665,13 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
         node[currentNode].threshold = final_Threshold;
         node[currentNode].left_Node = nodeCount+1;
         node[currentNode].right_Node = nodeCount+2;
+        usedFeatures[currentNode] = bestFeature;
 
         //Se o nó tiver muitas poucas samples, ele não deve criar outros pors é uma folha, demarcado por seus nós adjacentes serem -1
         if (sample_Amount[currentNode]<MIN_SAMPLES_PER_NODE)
         {
-            printf("\n\n--sample_Amount[currentNode]=%d",sample_Amount[currentNode]);
             node[currentNode].left_Node = -1;
             node[currentNode].right_Node = -1;
-            printf("\n--O no %d e uma folha isPostive(%d)!",currentNode,isPositive);
         }
 
         else
@@ -740,7 +680,6 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             // Para todos os samples do nó atual, para isso precisaremos de contadores para manter a posição de preenchimento da lista pré e pos
             int position_pre = 0;
             int position_pos = 0;
-            printf("\n\n--sample_Amount[currentNode]=%d",sample_Amount[currentNode]);
             for (int i = 0; i < sample_Amount[currentNode]; i++)
             {
                 // Se na dataMatrix na linha samplesMatrix atual coluna best feature
@@ -753,7 +692,6 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
                     position_pre++;
                     sample_Amount[nodeCount + 1]++;
                 }
-                //Checa se
 
                 // Se maior
                 else
@@ -770,7 +708,8 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             nodeCount += 2;
         }
         //Proxima Node
-        printf("\n\n----------------------------------------\nNode %d concluida, indo para Node%d\n",currentNode,currentNode+1);
+        printf("\n\n----------------------------------------\nNode %d:\tImpureza:%f\tFeature:%d\tSamples:%d\n",currentNode,bestGini,bestFeature,sample_Amount[currentNode]);
+        printf("No esquerdo:%d\tNo direito:%d\n",node[currentNode].left_Node,node[currentNode].right_Node);
         currentNode++;
         //Se o nó atual é maior que a qauntidade de nós, signfica que a arvre esta completa
         if (currentNode>nodeCount||nodeCount>NODE_LIMIT)
@@ -784,45 +723,33 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
 
 struct valueAnswer* sortFeature(double** dataMatrix, int feature_ID, int* sample_List, int sample_amount, int feature_Number)
 {
-    int* IDs_Excluidos = da_IntArr(IDs_Excluidos,sample_amount);
-    double menor_Valor=10.1E10;
-    int menor_ID=0;
-
     //Cria uma lista de resposta de tamanho sample_amount
     struct valueAnswer* outPut = (struct valueAnswer*)malloc(sample_amount*sizeof(struct valueAnswer));
-    if (outPut==NULL)
-    {
-        perror("\n--sortFeature AL:");
-        getchar();
-        exit(1);
-    }
+    if (outPut==NULL){perror("");getchar();exit(1);}
 
-    //Preenche IDs_Excluidos com valores impossiveis
+    //Cria burrfer de valueAnswer
+    struct valueAnswer buffer;
+
+    //Preencher a lista
     for (int i=0;i<sample_amount;i++)
     {
-        IDs_Excluidos[i]=-1;
+        outPut[i].value = dataMatrix[sample_List[i]][feature_ID];
+        outPut[i].awnser = dataMatrix[sample_List[i]][feature_Number-1];
     }
 
-    //Enquato output não estiver cheio
-    for (int i=0; i<sample_amount; i++)
+    //Ordenar a lista com um Bubblesort ;(
+    for (int i=0; i<sample_amount;i++)
     {
-        menor_Valor = 10.1E10; //Resetando o valor
-        //para todas as samples
-        for(int j=0;j<sample_amount;j++)
+        for (int j=0;j<sample_amount-i-1;j++)
         {
-            //Se for o menor (e não excluido) valor anotar o valor e o ID
-            if (dataMatrix[sample_List[j]][feature_ID]<menor_Valor&&(checkRepeat(IDs_Excluidos,sample_List[j],i)!=1))
+            if (outPut[j].value>outPut[j+1].value)
             {
-                menor_Valor = dataMatrix[sample_List[j]][feature_ID];
-                menor_ID = sample_List[j];
+                buffer = outPut[j];
+                outPut[j] = outPut[j+1];
+                outPut[j+1] = buffer;
             }
         }
-        //Anota menor valor e ID e o excloi ID
-
-        outPut[i].awnser=dataMatrix[menor_ID][feature_Number-1];
-        outPut[i].value=menor_Valor;
-        IDs_Excluidos[i]=menor_ID;
     }
-    free(IDs_Excluidos);
+    
     return outPut;
 }
