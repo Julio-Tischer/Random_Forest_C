@@ -13,12 +13,13 @@
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //Coloque aqui as variaveis para as arvores
-#define TREE_NUMBER 600                 //Quantas arvores a serem feitas (+ = +tempo)
-#define SAMPLE_SIZE 50                  //Quantas samples por arvore (+ = +tempo)
-#define FEATURES_PER_TREE 50            //Quantas features por arvore(+ = +tempo)
-#define MIN_SAMPLES_PER_NODE 5          //Minimo da samples para um nó ser considerado uma folha(+ = -tempo)
-#define NODE_LIMIT 50                   //Limite de nós de uma arvore, não diminui o tempo de processamento AO MENOS que seja um valor muito baixo (<15), mas aumenta qtd de arvores invalidadas
+#define TREE_NUMBER 22                   //Quantas arvores a serem feitas (+ = +tempo)
+#define SAMPLE_SIZE 297                  //Quantas samples por arvore (+ = +tempo)
+#define FEATURES_PER_TREE 122            //Quantas features por arvore(+ = +tempo)
+#define MIN_SAMPLES_PER_NODE 59          //Minimo da samples para um nó ser considerado uma folha(+ = -tempo)
+#define NODE_LIMIT 50                    //Limite de nós de uma arvore, não diminui o tempo de processamento AO MENOS que seja um valor muito baixo (<15), mas aumenta qtd de arvores invalidadas
 
+#define VERBOSE 0                         //Eu peguei essa ideia do copilot, defina como 0 para diminuir os prints
 //--------------------------------------------------------------------------------------------------------------------------//
 
 //foreshadowing de funções (estilo AoT)
@@ -84,10 +85,22 @@ int main()
     //Arquivos
     FILE* FILE_test = NULL;
     FILE* FILE_Train = NULL;
+    FILE* FILE_Metrics = NULL;
 
     int numeroFeatures=0;
     int numeroLinhas=0;
     int testeLinhas=0;
+
+    //Variaveis de teste
+    int TP=0;
+    int TN=0;
+    int FP=0;
+    int FN=0;
+    double err = (double)(FP+FN)/(FP+FN+TP+TN);
+    double acc = (double)(TP+TN)/(FP+FN+TP+TN);
+    double pre = (double)(TP)/(TP+FP);
+    double rec = (double)(TP)/(TP+FN);
+    double F1 = (2*pre*rec)/(pre+rec);
 
     //Matriz de double que armazena conteudo de uma dada linha e coluna
     double** dataTable = NULL;
@@ -204,7 +217,7 @@ int main()
     }
 
     //Para toda linha de teste
-    int acertos=0;
+    
     for (int i=0;i<testeLinhas;i++)
     {
         int positivos=0;
@@ -226,27 +239,52 @@ int main()
         else{resposta=0;}
 
         //Verificar se arvore acertou previsão
-        if (resposta==testTable[i][numeroFeatures-1])
+        if (resposta==testTable[i][numeroFeatures-1] && testTable[i][numeroFeatures-1]==1)
         {
-            acertos++;
+            TP++;
         }
-        printf("\n--%d arvores de %d deram resposta positiva. %f%%.\n--Arvores invalidas:%d\n",positivos,TREE_NUMBER-invalidas,100.0*positivos/(TREE_NUMBER-invalidas),invalidas);
+        else if (resposta==testTable[i][numeroFeatures-1] && testTable[i][numeroFeatures-1]==0)
+        {
+            TN++;
+        }
+        else if (resposta!=testTable[i][numeroFeatures-1] && resposta==1)
+        {
+            FP++;
+        }
+        else
+        {
+            FN++;
+        }
     }
-    printf("\n\n--Foram feitos %d acertos de %d. Precisao final de %f%%",acertos,testeLinhas,100.0*acertos/testeLinhas);
+    err = (double)(FP+FN)/(FP+FN+TP+TN);
+    acc = (double)(TP+TN)/(FP+FN+TP+TN);
+    pre = (double)(TP)/(TP+FP);
+    rec = (double)(TP)/(TP+FN);
+    F1 = (2*pre*rec)/(pre+rec);
 
-    //---------------------------------------------------------------------------------------------//
+    printf("\n\n TP:%d\t| FN:%d\n-----------------\n FP:%d\t| TN:%d\n",TP,FN,FP,TN);
+    printf("\nPrediction Error:\t%f\n",err);
+    printf("\nAccuracy:\t\t%f\t---%f%%\n",acc,acc*100);
+    printf("\nPrecision:\t\t%f\t---%f%%\n",pre,pre*100);
+    printf("\nRecall:\t\t\t%f\n",rec);
+    printf("\nF1_Score:\t\t%f\n",F1);
 
-    //Encerrção do codigo
-    fclose(FILE_Train);
-    fclose(FILE_test);
-
-    double_SuperFree(dataTable,numeroLinhas);
-    double_SuperFree(testTable,testeLinhas);
+    FILE_Metrics = fopen("metrics.csv","a");
+    fprintf(FILE_Metrics,"%d,%d,%d,%d,%d,%d,%d,%d,%d,%f,%f,%f,%f,%f\n",TREE_NUMBER,SAMPLE_SIZE,FEATURES_PER_TREE,MIN_SAMPLES_PER_NODE,NODE_LIMIT,TP,TN,FP,FN,err,acc,pre,rec,F1);
 
     for(int i = 0; i < TREE_NUMBER; i++) {
         free(forest[i].galhos);
     }
     free(forest);
+    //---------------------------------------------------------------------------------------------//
+
+    //Encerrção do codigo
+    fclose(FILE_Train);
+    fclose(FILE_test);
+    fclose(FILE_Metrics);
+
+    double_SuperFree(dataTable,numeroLinhas);
+    double_SuperFree(testTable,testeLinhas);
     
     //para terminal não fechar sozinho
     getchar(); 
@@ -378,11 +416,6 @@ struct giniOutput calcGini(int ID, double threshold, double best_Threshold, TVal
         outputStruct.feature_ID = ID;
         outputStruct.threshold = threshold;
         outputStruct.impurity = gini_Final;
-
-        if (gini_Final==0)
-        {
-            printf("asd");
-        }
 
         //Rodamos o .isPositive aqui pois os counter contem o valor do THR novo, assim substituindo o valor dado por best_THR
         // isPos em 2 significa que qualquer valor do nó é positivo, -1 que qualquer valor do no é negativo
@@ -691,6 +724,7 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
                 perror("");
             }
             orderedList = sortFeature(dataMatrix,feature_List[i],samples_Matrix[currentNode],sample_Amount[currentNode],feature_Number);
+            if (orderedList==NULL){break;}
             
             //Para todo threshold (Em uma lista, temos numero de samples do nó-1 thresholds possiveis)
             for (int j=0 ;j<sample_Amount[currentNode]-1;j++)
@@ -774,8 +808,11 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             nodeCount += 2;
         }
         //Proxima Node
-        printf("\n\n----------------------------------------\nNode %d:\tImpureza:%f\tFeature:%d\tSamples:%d\n",currentNode,bestGini,bestFeature,sample_Amount[currentNode]);
-        printf("No esquerdo:%d\tNo direito:%d\tIsPositive:%d\tThreshold:%f\n",node[currentNode].left_Node,node[currentNode].right_Node,node[currentNode].isPositive,node[currentNode].threshold);
+
+        if (VERBOSE!=0){
+            printf("\n\n----------------------------------------\nNode %d:\tImpureza:%f\tFeature:%d\tSamples:%d\n",currentNode,bestGini,bestFeature,sample_Amount[currentNode]);
+            printf("No esquerdo:%d\tNo direito:%d\tIsPositive:%d\tThreshold:%f\n",node[currentNode].left_Node,node[currentNode].right_Node,node[currentNode].isPositive,node[currentNode].threshold);
+        }
         currentNode++;
         //Se o nó atual é maior que a qauntidade de nós, signfica que a arvre esta completa
         if (currentNode>nodeCount||nodeCount>NODE_LIMIT)
@@ -801,7 +838,7 @@ struct valueAnswer* sortFeature(double** dataMatrix, int feature_ID, int* sample
     //Cria uma lista de resposta de tamanho sample_amount
     struct valueAnswer* outPut = (struct valueAnswer*)malloc((sample_amount)*sizeof(struct valueAnswer));
     if (outPut==NULL)
-    {perror("sortFeature NULLTST");getchar();exit(1);}
+    {perror("sortFeature NULLTST");getchar();return NULL;}
 
     //Cria burrfer de valueAnswer
     struct valueAnswer buffer;
