@@ -9,12 +9,11 @@ except FileNotFoundError:
     print("Por favor, crie este arquivo na mesma pasta do script.")
     print("="*50)
     exit() 
-    # Sai do script se o arquivo não existe
 
 print("--- Dados Originais Carregados (primeiras 5 linhas) ---")
 print(df.head())
 
-# separe as Features (X) e (y) 
+# separa as Features (X) e (y) 
 
 target_column = 'class'
 y = df[target_column]
@@ -23,7 +22,7 @@ X = df.drop(columns=[target_column, 'id'])
 
 
 X_train, X_test, y_train, y_test = train_test_split(
-    X, y, test_size=0.2, random_state=42
+    X, y, test_size=0.5, random_state=42 # <-- Alterado para 0.5 (50%)
 )
 # verificar resultados
 print("\n--- Alvo (y) (primeiras 5 linhas) ---")
@@ -34,10 +33,9 @@ print(X.head())
 
 print("\n--- Divisão dos dados concluída ---")
 print(f"Total de amostras: {len(df)}")
-print(f"Amostras de Treino: {len(X_train)} (80%)")
-print(f"Amostras de Teste:   {len(X_test)} (20%)")
+print(f"Amostras de Treino: {len(X_train)} (50%)")
+print(f"Amostras de Teste:   {len(X_test)} (50%)")
 
-# Recombine features + target and salvar como CSV sem cabeçalho e sem coluna 'id'
 try:
     train_df = X_train.copy()
     train_df[target_column] = y_train.values
