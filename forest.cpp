@@ -14,10 +14,11 @@
 
 //Coloque aqui as variaveis para as arvores
 #define TREE_NUMBER 22                   //Quantas arvores a serem feitas (+ = +tempo)
-#define SAMPLE_SIZE 297                  //Quantas samples por arvore (+ = +tempo)
-#define FEATURES_PER_TREE 122            //Quantas features por arvore(+ = +tempo)
+#define SAMPLE_SIZE 122                  //Quantas samples por arvore (+ = +tempo)
+#define FEATURES_PER_TREE 297            //Quantas features por arvore(+ = +tempo)
 #define MIN_SAMPLES_PER_NODE 59          //Minimo da samples para um nó ser considerado uma folha(+ = -tempo)
 #define NODE_LIMIT 50                    //Limite de nós de uma arvore, não diminui o tempo de processamento AO MENOS que seja um valor muito baixo (<15), mas aumenta qtd de arvores invalidadas
+#define ALLOW_REPEAT_SAMPLES 0           //Permite samples reutilizados no bootsrap
 
 #define VERBOSE 0                         //Eu peguei essa ideia do copilot, defina como 0 para diminuir os prints
 //--------------------------------------------------------------------------------------------------------------------------//
@@ -26,7 +27,7 @@
 int checkRepeat (int* vector, int new_entry, int sizeOf_Vector);
 int testStructure(struct Tree tree, double* testData, int featureNumber);
 int* da_IntArr (int* variable, int size);
-int* rndList(int sizeof_List, int maxNumber, int minNumber);
+int* rndList(int sizeof_List, int maxNumber, int minNumber, int allow_Repeat);
 
 double* da_DBLArr (double* variable, int size);
 double** sortSTG (double** matrizDados,int coluna, int numeroLinhas, int numeroFeatures);
@@ -206,8 +207,8 @@ int main()
     //Para toda arvore, criar ela com sample e features aleatorias
     for (int i=0; i<TREE_NUMBER; i++)
     {
-        int* local_Samples = rndList(SAMPLE_SIZE, numeroLinhas, 0);
-        int* local_Features = rndList(FEATURES_PER_TREE, numeroFeatures-1, 0);
+        int* local_Samples = rndList(SAMPLE_SIZE, numeroLinhas, 0, ALLOW_REPEAT_SAMPLES);
+        int* local_Features = rndList(FEATURES_PER_TREE, numeroFeatures-1, 0, 0);
 
         forest[i] = buildTree(dataTable,local_Samples,local_Features,numeroFeatures,numeroLinhas);
         printf("\n\n//---------------------------------------------------//\n\t%d Arvore criada\n",i+1);
@@ -270,7 +271,7 @@ int main()
     printf("\nF1_Score:\t\t%f\n",F1);
 
     FILE_Metrics = fopen("metrics.csv","a");
-    fprintf(FILE_Metrics,"%d,%d,%d,%d,%d,%d,%d,%d,%d,%f,%f,%f,%f,%f\n",TREE_NUMBER,SAMPLE_SIZE,FEATURES_PER_TREE,MIN_SAMPLES_PER_NODE,NODE_LIMIT,TP,TN,FP,FN,err,acc,pre,rec,F1);
+    fprintf(FILE_Metrics,"%d,%d,%d,%d,%d,%d,%d,%d,%d,%d,%f,%f,%f,%f,%f\n",TREE_NUMBER,SAMPLE_SIZE,FEATURES_PER_TREE,MIN_SAMPLES_PER_NODE,NODE_LIMIT,ALLOW_REPEAT_SAMPLES,TP,TN,FP,FN,err,acc,pre,rec,F1);
 
     for(int i = 0; i < TREE_NUMBER; i++) {
         free(forest[i].galhos);
@@ -637,7 +638,7 @@ int testStructure(struct Tree tree, double* testData, int featureNumber)
 }
 
 //Cria um lista aleatoria de tamanho e numero limite especificado
-int* rndList(int sizeof_List, int maxNumber, int minNumber)
+int* rndList(int sizeof_List, int maxNumber, int minNumber,int allow_Repeat)
 {
     int randomNumber;
     int* outputList=NULL;
@@ -650,8 +651,8 @@ int* rndList(int sizeof_List, int maxNumber, int minNumber)
         //Numero entre minNumber e maxNumber
         randomNumber = rand()%maxNumber + minNumber;
 
-        //Se o numero não estiver na lista, adiciona-o e incrementa iterator
-        if (checkRepeat(outputList,randomNumber,iterator)!=1)
+        //Se o numero não estiver na lista, ou allow_Repeat = 1, adiciona-o e incrementa iterator
+        if (checkRepeat(outputList,randomNumber,iterator)!=1 || allow_Repeat==1)
         {
             outputList[iterator]=randomNumber;
             iterator++;
@@ -702,7 +703,7 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
     }
 
     //Zera o valor de sample_Amount
-    for (int i=1;i<FEATURES_PER_TREE;i++)
+    for (int i=1;i<FEATURES_PER_TREE+NODE_LIMIT;i++)
     {
         sample_Amount[i]=0;
     }
@@ -721,7 +722,7 @@ struct Tree buildTree(double** dataMatrix, int* sample_List, int* feature_List, 
             //Ordenar de forma crescente
             if (sample_Amount<0)
             {
-                perror("");
+                perror("Sample_Amount<0:");
             }
             orderedList = sortFeature(dataMatrix,feature_List[i],samples_Matrix[currentNode],sample_Amount[currentNode],feature_Number);
             if (orderedList==NULL){break;}
